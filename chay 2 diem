@@ -1,0 +1,39 @@
+// Script tamtobon
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using RobotNet5.Robot;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using RobotNet5.AGV.Line.Control.Core;
+using RobotNet5.Audio;
+
+logger.LogInformation("tamtobon bat dau");
+var AGVManager = services.GetRequiredService<IAGVLineManager>();
+var AGVControl = AGVManager.GetAGVLineController(cancellationToken);
+var AudioManager = services.GetRequiredService<IAudioManager>();
+
+if(AGVControl is null) throw new Exception("AGVControl is null");
+
+try
+{
+    
+   
+    AGVControl.Add(new(0) {Linear = 0.5, LCP = LCP.Center, State = State.FollowLine}, cancellationToken);
+    AGVControl.Add(new(7) {LCP = LCP.Center,State = State.StopFree,}, cancellationToken);
+    AGVControl.Direction = Direction.Forward;
+    AGVControl.RequestingToRun();
+    await AGVControl.Run(cancellationToken, MethodType.Disposable);
+    AudioManager.Play("robot_da_den.wav");
+}
+catch(Exception Ex)
+{
+    await console.ErrorAsync(Ex.Message);
+    logger.LogError(Ex.Message);
+}
+finally
+{
+    AGVControl.Release();
+    logger.LogInformation("tamtoba ket thuc");
+}

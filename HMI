@@ -1,0 +1,147 @@
+// Script StestTramGoi
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using RobotNet5.Robot;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using RobotNet5.AGV.Line.Control.Core;
+
+var StateManager = services.GetRequiredService<IStateProvider>();
+var AGVLineManager = services.GetRequiredService<IAGVLineManager>();
+var AGVControl = AGVLineManager.GetAGVLineController(cancellationToken);
+
+if(AGVControl is null) throw new("AGVControl is null");
+var StationTags = StateManager.Get<int>("Station");
+var CurrentTag = StateManager.Get<int>("Tag");
+var StationTagOlder = StationTags.Value;
+
+Queue<int> Tags = new Queue<int>();
+double linearDefault = 0.4;
+
+List<(int start, int goal, Direction direction, List<Step> steps)> Waypoints = new (){
+    (4, 5, Direction.Forward,new() { (new(0) {Linear = linearDefault , LCP = LCP.Center}) }),
+    (4, 6, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Center}) }),
+    (4, 7, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Center}) }),
+    (4, 8, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Right}) }),
+    (4, 11, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Left}) }),
+
+    (5, 4, Direction.Backward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Center}) }),
+    (5, 6, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Center}) }),
+    (5, 7, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Center}) }),
+    (5, 8, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Center}) }),
+    (5, 11, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Center}) }),
+
+    
+    (6, 4, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Center}) }),
+    (6, 5, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Center}) }),
+    (6, 7, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Center}) }),
+    (6, 8, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Right}) }),
+    (6, 11, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Left}) }),
+
+    (7, 4, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Center}) }),
+    (7, 5, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Center}) }),
+    (7, 6, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Center}) }),
+    (7, 8, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Right}) }),
+    (7, 11, Direction.Forward, new() {(new(0) {Linear = linearDefault , LCP = LCP.Left}) }),
+
+    (8, 4, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Left}) }),
+    (8, 5, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Left}) }),
+    (8, 6, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Left}) }),
+    (8, 7, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Left}) }),
+    (8, 11, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Left}), (new(7) {Linear = linearDefault , LCP = LCP.Left}) }),
+
+    (11, 4, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Right}) }),
+    (11, 5, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Right}) }),
+    (11, 6, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Right}) }),
+    (11, 7, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Right}) }),
+    (11, 8, Direction.Backward, new() {(new(0) {Linear = -linearDefault , LCP = LCP.Right}), (new(7) {Linear = linearDefault , LCP = LCP.Right}) }),
+};
+
+
+
+var AddTags = Task.Run(() => {
+    // Đọc dữ liệu từ màn hình
+    while (!cancellationToken.IsCancellationRequested)
+    {
+        if(StationTagOlder != StationTags.Value && !Tags.Contains(StationTags.Value))
+        {
+            Tags.Enqueue(StationTags.Value);
+            StationTagOlder = StationTags.Value;
+        }
+    }
+});
+
+//var ExpandIO = services.GetRequiredService<IExpandIO>();
+
+// ExpandIO.SetOutput(2, true);
+// bool pin2 = ExpandIO.GetOutput(2);
+// await console.WriteAsync($"pin2 = {pin2}");
+
+
+try
+{
+    await console.WriteLineAsync("Running!");
+    while (!cancellationToken.IsCancellationRequested)
+    {
+        // await AGVControl.WaittingToRun(cancellationToken);
+        int tag;
+        switch(AGVControl.ReadStationNumber())
+        {
+            case 1:
+                tag = 4;
+                //ExpandIO.SetOutput(2, true);
+                break;
+            case 2:
+                tag = 5;
+                //ExpandIO.SetOutput(2, false);
+                break;
+            case 3:
+                tag = 6;
+                break;
+            case 4:
+                tag = 7;
+                break;
+            default:
+                tag = 0;
+                break;
+        }
+
+        if(tag != CurrentTag.Value && tag != 0)
+        {
+            await console.WriteLineAsync($"Tag = {tag}");
+            if(Waypoints.Exists(w => w.start == CurrentTag.Value && w.goal == tag )) 
+            {
+                var result = Waypoints.Find(w => w.start == CurrentTag.Value && w.goal == tag);
+                foreach(var step in result.steps)
+                {
+                    await console.WriteLineAsync($"tag[{step.Tag}] Linear[{step.Linear}] , LCP[{step.LCP}]");
+                    AGVControl.Add(step, cancellationToken);
+                }
+                AGVControl.Add(new((ulong)tag) { State = State.StopFree}, cancellationToken);
+                AGVControl.Direction = result.direction;
+                await Task.Delay(500, cancellationToken);
+                AGVControl.RequestingToRun();
+                await AGVControl.Run(cancellationToken, MethodType.Disposable);
+                AGVControl.Clear(cancellationToken);
+                await console.WriteLineAsync($"ve dich tag[{tag}]");
+            }
+            else await console.WarningAsync($"tag[{tag}] khong ton tai");
+        }
+        // xử lý robot
+    
+        //bool pin2 = ExpandIO.GetOutput(2);
+        //await console.WriteAsync($"pin2 = {pin2}");
+
+        //await Task.Delay(500, cancellationToken);
+    }
+}
+catch(Exception e)
+{
+    await console.ErrorAsync($"{e}");
+}
+finally
+{
+    AGVControl.Release();
+}

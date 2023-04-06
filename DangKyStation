@@ -1,0 +1,23 @@
+// Script DangKyStation
+
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using RobotNet5.Robot;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using RobotNet5.AGV.Line.Control.Core;
+
+
+var StateManager = services.GetRequiredService<IStateProvider>();
+var StationTags = StateManager.Get<int>("Station");
+
+int tag;
+if(args.Length < 1) return;
+
+if(Int32.TryParse(args[0], out tag))
+{
+    await console.WriteLineAsync($"dang ki den the so {tag}");
+    await StationTags.SetAsync(tag);
+}
